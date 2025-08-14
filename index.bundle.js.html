@@ -1,162 +1,67 @@
 <script type="module">
 // =================================================================
-// FILE: types.ts
+// KONFIGURASI FRONTEND
 // =================================================================
-// Global declarations for environment-specific variables
-// This space is intentionally left for global type declarations if needed in the future.
-
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxqZtFZ5025PKt547C105ctC697OZlxvtFX9URDCt4zisAMLv_SuXSSFudtrlXatSVm/exec';
 
 // =================================================================
-// FILE: services/api.ts
+// FILE: services/api.ts (VERSI FETCH API)
 // =================================================================
 
-// Promisify the google.script.run calls for a modern async/await syntax
-const serverCall = (functionName, ...args) => {
-    return new Promise((resolve, reject) => {
-        google.script.run
-            .withSuccessHandler((result) => resolve(result))
-            .withFailureHandler(reject)
-            [functionName](...args);
+// Helper untuk memanggil backend Apps Script menggunakan fetch
+const apiCall = async (functionName, ...args) => {
+    const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'text/plain;charset=utf-8', // Diperlukan oleh Apps Script
+        },
+        body: JSON.stringify({ functionName, args }),
+        // 'mode: no-cors' akan menyebabkan error, biarkan default (cors)
     });
+
+    if (!response.ok) {
+        throw new Error(`Network response was not ok: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    
+    if (result.error) {
+       throw new Error(result.error);
+    }
+
+    return result;
 };
 
-// SERVER API (for deployed app on Google Apps Script)
-const serverApi = {
-    ping: () => serverCall('ping'),
-    login: (email, password) => serverCall('login', email, password),
-    logout: () => serverCall('logout'),
-    checkAuth: () => serverCall('checkAuth'),
-    getDashboardStats: () => serverCall('getDashboardStats'),
-    listSurat: (type, filters) => serverCall('listSurat', type, filters),
-    createSurat: (type, data) => serverCall('createSurat', type, data),
-    updateSurat: (type, id, data) => serverCall('updateSurat', type, id, data),
-    deleteSurat: (type, id) => serverCall('deleteSurat', type, id),
-    getNewNomorSurat: () => serverCall('getNewNomorSurat'),
-    updateUserProfile: (data) => serverCall('updateUserProfile', data),
+// Implementasi API menggunakan fetch
+export const api = {
+    ping: () => apiCall('ping'),
+    login: (email, password) => apiCall('login', email, password),
+    logout: () => apiCall('logout'),
+    checkAuth: () => apiCall('checkAuth'),
+    getDashboardStats: () => apiCall('getDashboardStats'),
+    listSurat: (type, filters) => apiCall('listSurat', type, filters),
+    createSurat: (type, data) => apiCall('createSurat', type, data),
+    updateSurat: (type, id, data) => apiCall('updateSurat', type, id, data),
+    deleteSurat: (type, id) => apiCall('deleteSurat', type, id),
+    getNewNomorSurat: () => apiCall('getNewNomorSurat'),
+    updateUserProfile: (data) => apiCall('updateUserProfile', data),
 };
 
-// MOCK API (for local development, `npm run dev`)
-const mockApi = {
-    async ping() {
-        console.log("MOCK API: PING");
-        await new Promise(res => setTimeout(res, 200));
-        return { success: true, source: 'Koneksi Lokal (Mock Data)' };
-    },
-    async login(email, password) {
-        console.log("MOCK API: Logging in", { email, password });
-        await new Promise(res => setTimeout(res, 500));
-        if (email === 'admin@example.com' && password === 'admin123') {
-            const user = {
-                ID: 'user-1',
-                Email: 'admin@example.com',
-                Nama: 'Admin Lokal',
-                Jabatan: 'Developer',
-                Unit: 'IT',
-                'Foto URL': `https://i.pravatar.cc/150?u=admin@example.com`,
-            };
-            return { success: true, user };
-        }
-        return { success: false, message: 'Email atau password salah.' };
-    },
-    async logout() {
-        console.log("MOCK API: Logging out");
-        return { success: true };
-    },
-    async checkAuth() {
-        console.log("MOCK API: Checking auth status");
-        return { success: false };
-    },
-    async getDashboardStats() {
-        console.log("MOCK API: Fetching dashboard stats");
-        await new Promise(res => setTimeout(res, 500));
-        return {
-            totalMasuk: 125,
-            totalKeluar: 88,
-            masukBulanIni: 15,
-            keluarBulanIni: 9,
-            belumDisposisi: 7,
-        };
-    },
-    async listSurat(type, filters) {
-        console.log("MOCK API: Listing surat", { type, filters });
-        await new Promise(res => setTimeout(res, 500));
-        // Mock data for surat masuk
-        if (type === 'masuk') {
-          return [
-            { ID: 'sm-1', 'Nomor Surat': '123/ABC/XI/2023', 'Asal Surat': 'PT. Sejahtera', Perihal: 'Undangan Rapat Koordinasi', 'Tanggal Diterima': '2023-11-10', Status: 'Belum Disposisi' },
-            { ID: 'sm-2', 'Nomor Surat': 'IV/UND/SKL/2023', 'Asal Surat': 'Dinas Pendidikan', Perihal: 'Permohonan Data Siswa', 'Tanggal Diterima': '2023-11-08', Status: 'Sudah Disposisi' }
-          ];
-        }
-        return []; // Return empty for other types for simplicity
-    },
-    async createSurat(type, data) {
-        console.log("MOCK API: Creating surat", { type, data });
-        return { success: true };
-    },
-    async updateSurat(type, id, data) {
-        console.log("MOCK API: Updating surat", { type, id, data });
-        return { success: true };
-    },
-    async deleteSurat(type, id) {
-        console.log("MOCK API: Deleting surat", { type, id });
-        return { success: true };
-    },
-    async getNewNomorSurat() {
-        console.log("MOCK API: Getting new nomor surat");
-        return `MOCK/${new Date().getFullYear()}/001`;
-    },
-    async updateUserProfile(data) {
-        console.log("MOCK API: Updating user profile", { data });
-        const updatedUser = {
-            ID: 'user-1',
-            Email: 'admin@example.com',
-            Nama: data.Nama || 'Admin Lokal',
-            Jabatan: data.Jabatan || 'Developer',
-            Unit: data.Unit || 'IT',
-            'Foto URL': data['Foto URL'] || `https://i.pravatar.cc/150?u=admin@example.com`,
-        };
-        return { success: true, user: updatedUser };
-    },
-};
-
-// EXPORT API
-// This is the magic: it checks if `google.script.run` exists.
-// If it does, we're on the server, use `serverApi`.
-// If not, we're in local development, use `mockApi`.
-export const api = typeof google !== 'undefined' && google?.script?.run ? serverApi : mockApi;
-
 
 // =================================================================
-// FILE: components/common/Icon.tsx
+// SEMUA KODE REACT/TSX ANDA DIMULAI DARI SINI
+// (Untuk singkatnya, ini hanya men-impor App.tsx dari URL,
+// namun dalam bundel nyata, semua kode akan ada di sini)
 // =================================================================
-// All Icon components from components/common/Icon.tsx are assumed to be here
-// For brevity, I will only list a few, but in the actual file, all of them would be here.
-// In a real build process, imports would handle this.
-// But for this manual bundle, we're putting them in scope.
-export const AppLogoIcon = ({ className = 'w-10 h-10' }) => (
-    React.createElement('svg', { xmlns: "http://www.w3.org/2000/svg", className: className, viewBox: "0 0 24 24", fill: "currentColor" },
-        React.createElement('path', { d: "M21.99,12a2,2,0,0,0-1-1.72L5,3.22a2,2,0,0,0-2.82,2.06l1.93,9.45a1,1,0,0,0,1,.87h7.24l-3.3,3.3a1,1,0,0,0,0,1.42,1,1,0,0,0,1.42,0L14,16.83V20a1,1,0,0,0,2,0v-5.17l4.47-4.47A2,2,0,0,0,21.99,12ZM15.41,15,5.74,15.29,4.1,7.54l12.44,6.4Z" })
-    )
-);
-// ... and so on for ALL other icons from Icon.tsx
-// This is a simplified representation. The full file would contain all icon components.
+import React from "https://esm.sh/react@18.2.0";
+import ReactDOM from "https://esm.sh/react-dom@18.2.0/client";
 
-// =================================================================
-// FILE: App.tsx (and all other components)
-// =================================================================
-// The content of App.tsx and all its imported components (Dashboard, LoginPage, etc.)
-// would be here. Due to the character limit, I am representing them conceptually.
-// In a real build, all the TSX code would be converted to JS and included here.
-// For now, let's assume all those components are defined in this scope.
+// Impor semua komponen Anda
+// Dalam proses build nyata, ini tidak akan menjadi URL
+// Ini hanya untuk menyederhanakan demo ini
+import App from './App.tsx';
 
-// =================================================================
-// FILE: index.tsx - The entry point
-// =================================================================
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App'; // This import now works because App.tsx is in the same "file"
-
-// Polyfill for Google Apps Script's environment
+// Polyfill
 if (typeof global === 'undefined') {
   window.global = window;
 }
@@ -167,33 +72,8 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-// This is a placeholder for your actual App component
-// Since the full App.tsx code isn't here, I'm using a placeholder
-// In the real file, you would just have: root.render(<App />);
-const PlaceholderApp = () => {
-    const [message, setMessage] = React.useState("Mencoba memuat aplikasi...");
-
-    React.useEffect(() => {
-        api.ping().then(response => {
-            if(response.success){
-                setMessage(`Koneksi ke backend berhasil! Sumber: ${response.source}. Aplikasi utama sedang dimuat...`);
-                // In a complete file, the full App component would render here instead.
-            } else {
-                 setMessage(`Gagal terhubung ke backend. Error: ${response.error}`);
-            }
-        }).catch(err => {
-             setMessage(`Error fatal saat menghubungi backend: ${err.message}`);
-        });
-    }, []);
-    
-    // In the real implementation, you would have your full App component here.
-    // For now, let's load the *actual* App.
-     return React.createElement(App);
-};
-
-
 root.render(
-  React.createElement(React.StrictMode, null, React.createElement(PlaceholderApp))
+  React.createElement(React.StrictMode, null, React.createElement(App))
 );
 
 </script>
