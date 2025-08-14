@@ -1,3 +1,20 @@
-// This file's content has been moved into index.bundle.js.html
-// to create a single file for deployment in Google Apps Script.
-// This approach simplifies the deployment process by avoiding a complex build step.
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+// Polyfill for environments that might need it.
+if (typeof global === 'undefined') {
+  window.global = window;
+}
+
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
