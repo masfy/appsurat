@@ -1,93 +1,128 @@
+import { DashboardStats, MailType, Surat, Filters, AuthUser, UserProfile } from '../types';
 
-import { DashboardStats, MailType, Surat, Filters, SuratMasuk, SuratKeluar, UserProfile, AuthUser } from '../types';
+// =================================================================
+// HELPER & INTERFACES
+// =================================================================
 
-// This is a mock for development outside of the GAS environment.
-const gasRunner = (fnName: string, ...args: any[]): Promise<any> => {
+// Promisify the google.script.run calls for a modern async/await syntax
+const serverCall = <T>(functionName: string, ...args: any[]): Promise<T> => {
     return new Promise((resolve, reject) => {
-        if (typeof google === 'undefined' || typeof google.script === 'undefined') {
-            console.warn(`google.script.run is not available. Mocking API call for ${fnName}.`);
-            // Mock data for local development
-             if (fnName === 'login') {
-                 if (args[0] === 'admin@example.com' && args[1] === 'admin123') {
-                     resolve({ success: true, user: { ID: '1', Email: 'admin@example.com', Nama: 'Admin Alfy', Jabatan: 'Developer', Unit: 'IT', 'Foto URL': '' } });
-                 } else {
-                     resolve({ success: false, message: 'Email atau password salah.' });
-                 }
-             } else if (fnName === 'checkAuth') {
-                 // To test logged out state, change this to resolve({ success: false });
-                 resolve({ success: true, user: { ID: '1', Email: 'admin@example.com', Nama: 'Admin Alfy', Jabatan: 'Developer', Unit: 'IT', 'Foto URL': '' } });
-             } else if (fnName === 'logout') {
-                 resolve({ success: true });
-             } else if (fnName === 'getUserProfile') {
-                 resolve({ ID: '1', Email: 'admin@example.com', Nama: 'Admin Alfy', Jabatan: 'Developer', Unit: 'IT', 'Foto URL': '' });
-             } else if (fnName === 'getDashboardStats') {
-                 resolve({ totalMasuk: 10, totalKeluar: 5, masukBulanIni: 2, keluarBulanIni: 1, belumDisposisi: 3 });
-             } else if (fnName === 'listSurat') {
-                 resolve([]);
-             } else {
-                 resolve({success: true, message: "Mocked success"});
-             }
-            return;
-        }
-
         google.script.run
-            .withSuccessHandler(response => {
-                // GAS can return an Error object on failure
-                if (response instanceof Error) {
-                    reject(response);
-                } else if (response && response.error) {
-                    reject(new Error(response.error));
-                } else {
-                    resolve(response);
-                }
-            })
+            .withSuccessHandler((result: T) => resolve(result))
             .withFailureHandler(reject)
-            [fnName](...args);
+            [functionName](...args);
     });
 };
 
-export const api = {
-    // Auth
-    login: (email: string, password: string): Promise<{ success: boolean; user?: AuthUser; message?: string; }> => {
-        return gasRunner('login', email, password);
-    },
-    logout: (): Promise<{ success: boolean; }> => {
-        return gasRunner('logout');
-    },
-    checkAuth: (): Promise<{ success: boolean; user?: AuthUser; }> => {
-        return gasRunner('checkAuth');
-    },
+interface ApiResponse<T> {
+    success: boolean;
+    user?: T;
+    message?: string;
+}
 
-    // Dashboard
-    getDashboardStats: (): Promise<DashboardStats> => {
-        return gasRunner('getDashboardStats');
-    },
+// =================================================================
+// SERVER API (for deployed app on Google Apps Script)
+// =================================================================
 
-    // Surat
-    listSurat: (type: MailType, filters: Filters): Promise<Surat[]> => {
-        return gasRunner('listSurat', type, filters);
-    },
-    getSuratById: (type: MailType, id: string): Promise<Surat> => {
-        return gasRunner('getSuratById', type, id);
-    },
-    getNewNomorSurat: (): Promise<string> => {
-        return gasRunner('getNewNomorSurat');
-    },
-    createSurat: (type: MailType, data: Partial<SuratMasuk> | Partial<SuratKeluar>): Promise<{ success: boolean; message: string; }> => {
-        return gasRunner('createSurat', type, data);
-    },
-    updateSurat: (type: MailType, id: string, data: Partial<SuratMasuk> | Partial<SuratKeluar>): Promise<{ success: boolean; message: string; }> => {
-        return gasRunner('updateSurat', type, id, data);
-    },
-    deleteSurat: (type: MailType, id: string): Promise<{ success: boolean; message: string; }> => {
-        return gasRunner('deleteSurat', type, id);
-    },
+const serverApi = {
+    ping: () => serverCall<{ success: boolean; source: string; }>('ping'),
+    login: (email: string, password: string): Promise<ApiResponse<AuthUser>> => serverCall('login', email, password),
+    logout: (): Promise<{ success: boolean }> => serverCall('logout'),
+    checkAuth: (): Promise<ApiResponse<AuthUser>> => serverCall('checkAuth'),
+    getDashboardStats: (): Promise<DashboardStats> => serverCall('getDashboardStats'),
+    listSurat: (type: MailType, filters: Filters): Promise<Surat[]> => serverCall('listSurat', type, filters),
+    createSurat: (type: MailType, data: Partial<Surat>): Promise<{ success: boolean }> => serverCall('createSurat', type, data),
+    updateSurat: (type: MailType, id: string, data: Partial<Surat>): Promise<{ success: boolean }> => serverCall('updateSurat', type, id, data),
+    deleteSurat: (type: MailType, id: string): Promise<{ success: boolean }> => serverCall('deleteSurat', type, id),
+    getNewNomorSurat: (): Promise<string> => serverCall('getNewNomorSurat'),
+    updateUserProfile: (data: Partial<UserProfile>): Promise<ApiResponse<AuthUser>> => serverCall('updateUserProfile', data),
+};
 
-    // User Profile
-    getUserProfile: (): Promise<AuthUser> => {
-        return gasRunner('getUserProfile');
+// =================================================================
+// MOCK API (for local development, `npm run dev`)
+// =================================================================
+
+const mockApi = {
+    async ping() {
+        console.log("MOCK API: PING");
+        await new Promise(res => setTimeout(res, 200));
+        return { success: true, source: 'Koneksi Lokal (Mock Data)' };
     },
-    updateUserProfile: (profile: Partial<AuthUser> & { photoFile?: any }): Promise<{ success: boolean; message: string; }> => {
-        return gasRunner('updateUserProfile', profile);
+    async login(email: string, password: string): Promise<ApiResponse<AuthUser>> {
+        console.log("MOCK API: Logging in", { email, password });
+        await new Promise(res => setTimeout(res, 500));
+        if (email === 'admin@example.com' && password === 'admin123') {
+            const user: AuthUser = {
+                ID: 'user-1',
+                Email: 'admin@example.com',
+                Nama: 'Admin Lokal',
+                Jabatan: 'Developer',
+                Unit: 'IT',
+                'Foto URL': `https://i.pravatar.cc/150?u=admin@example.com`,
+            };
+            return { success: true, user };
+        }
+        return { success: false, message: 'Email atau password salah.' };
+    },
+    async logout(): Promise<{ success: boolean }> {
+        console.log("MOCK API: Logging out");
+        return { success: true };
+    },
+    async checkAuth(): Promise<ApiResponse<AuthUser>> {
+         // In a real local setup, this might check localStorage. For now, we assume not logged in.
+        console.log("MOCK API: Checking auth status");
+        return { success: false };
+    },
+    async getDashboardStats(): Promise<DashboardStats> {
+        console.log("MOCK API: Fetching dashboard stats");
+        await new Promise(res => setTimeout(res, 500));
+        return {
+            totalMasuk: 125,
+            totalKeluar: 88,
+            masukBulanIni: 15,
+            keluarBulanIni: 9,
+            belumDisposisi: 7,
+        };
+    },
+    async listSurat(type: MailType, filters: Filters): Promise<Surat[]> {
+        console.log("MOCK API: Listing surat", { type, filters });
+        await new Promise(res => setTimeout(res, 500));
+        return []; // Return empty for simplicity, or generate mock data
+    },
+    async createSurat(type: MailType, data: Partial<Surat>): Promise<{ success: boolean }> {
+        console.log("MOCK API: Creating surat", { type, data });
+        return { success: true };
+    },
+    async updateSurat(type: MailType, id: string, data: Partial<Surat>): Promise<{ success: boolean }> {
+        console.log("MOCK API: Updating surat", { type, id, data });
+        return { success: true };
+    },
+    async deleteSurat(type: MailType, id: string): Promise<{ success: boolean }> {
+        console.log("MOCK API: Deleting surat", { type, id });
+        return { success: true };
+    },
+    async getNewNomorSurat(): Promise<string> {
+        console.log("MOCK API: Getting new nomor surat");
+        return `MOCK/${new Date().getFullYear()}/001`;
+    },
+    async updateUserProfile(data: Partial<UserProfile>): Promise<ApiResponse<AuthUser>> {
+        console.log("MOCK API: Updating user profile", { data });
+        const updatedUser: AuthUser = {
+            ID: 'user-1',
+            Email: 'admin@example.com',
+            Nama: data.Nama || 'Admin Lokal',
+            Jabatan: data.Jabatan || 'Developer',
+            Unit: data.Unit || 'IT',
+            'Foto URL': data['Foto URL'] || `https://i.pravatar.cc/150?u=admin@example.com`,
+        };
+        return { success: true, user: updatedUser };
     },
 };
+
+// =================================================================
+// EXPORT API
+// =================================================================
+// This is the magic: it checks if `google.script.run` exists.
+// If it does, we're on the server, use `serverApi`.
+// If not, we're in local development, use `mockApi`.
+export const api = typeof google !== 'undefined' && google?.script?.run ? serverApi : mockApi;
