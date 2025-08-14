@@ -1,0 +1,5 @@
+{
+  "name": "Aplikasi Manajemen Surat",
+  "description": "Aplikasi web untuk mengelola surat masuk dan surat keluar untuk sekolah atau instansi, dibangun dengan Google Apps Script dan React.",
+  "requestFramePermissions": []
+}
