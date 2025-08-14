@@ -35,7 +35,7 @@
 </head>
   <body class="bg-gray-100 dark:bg-gray-900 transition-colors duration-300">
     <div id="root"></div>
-    <!-- Load the bundled React code. The .html extension is a GAS convention. -->
-    <?!= include('index.bundle.js.html'); ?>
+    <!-- Load the React application entry point. This is the standard way. -->
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>
