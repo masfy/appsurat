@@ -18,12 +18,32 @@ const App: React.FC = () => {
     const [authUser, setAuthUser] = useState<AuthUser | null>(null);
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
     const [isProfileMenuOpen, setProfileMenuOpen] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState<string>('Mengecek koneksi...');
     
     const profileMenuRef = useRef<HTMLDivElement>(null);
 
     const [theme, setTheme] = useState<Theme>(
         (localStorage.getItem('theme') as Theme) || 'light'
     );
+
+    useEffect(() => {
+        // --- Connection Test ---
+        const checkConnection = async () => {
+            try {
+                const response = await api.ping();
+                if (response.success) {
+                    setConnectionStatus(`Koneksi: ${response.source}`);
+                } else {
+                    setConnectionStatus('Koneksi: Gagal terhubung ke backend.');
+                }
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Error tidak diketahui';
+                setConnectionStatus(`Koneksi Error: ${errorMessage}`);
+                console.error("Connection ping failed:", error);
+            }
+        };
+        checkConnection();
+    }, []);
 
     useEffect(() => {
         const root = window.document.documentElement;
@@ -53,7 +73,8 @@ const App: React.FC = () => {
                 setIsCheckingAuth(false);
             }
         };
-        checkUserAuth();
+        // Run after a short delay to allow the connection test to complete first
+        setTimeout(checkUserAuth, 100);
     }, []);
     
     useEffect(() => {
@@ -244,7 +265,8 @@ const App: React.FC = () => {
                     {renderView()}
                 </main>
                 <footer className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 bg-white/70 backdrop-blur-md dark:bg-gray-800/70 border-t dark:border-gray-700/50">
-                    Dibuat dengan ❤️ oleh mas alfy.
+                    <span className="mr-2">Dibuat dengan ❤️ oleh mas alfy.</span> | 
+                    <span className="ml-2 font-mono text-xs">{connectionStatus}</span>
                 </footer>
             </div>
 
