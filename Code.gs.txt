@@ -1,71 +1,82 @@
+
 // =================================================================
 // KONFIGURASI APLIKASI
 // =================================================================
-// Ganti dengan ID Spreadsheet dan Folder Google Drive Anda.
 const SPREADSHEET_ID = '11Wkh9gRrmmsAYQvKdaHyebYveuEp5cdcEx6Wy_w7T5Y';
 const DRIVE_FOLDER_ID = '1bGAnU5PRCPei9sjAnJIyBeLoRjv2nOVd';
+const FRONTEND_URL = 'https://masfy.github.io'; // URL frontend Anda
 
 // Nama-nama sheet di dalam Spreadsheet Anda.
 const SHEET_PENGGUNA = 'Pengguna';
 const SHEET_SURAT_MASUK = 'SuratMasuk';
 const SHEET_SURAT_KELUAR = 'SuratKeluar';
 
-
 // =================================================================
-// FUNGSI UTAMA UNTUK MENAMPILKAN APLIKASI WEB
-// =================================================================
-
-/**
- * Fungsi utama yang dipanggil saat URL aplikasi diakses.
- * @returns {HtmlOutput} Halaman HTML aplikasi.
- */
-function doGet(e) {
-  const html = HtmlService.createTemplateFromFile('index').evaluate();
-  html.setTitle('Aplikasi Manajemen Surat');
-  html.addMetaTag('viewport', 'width=device-width, initial-scale=1');
-  return html;
-}
-
-/**
- * Fungsi untuk menyertakan konten file JS ke dalam HTML.
- * @param {string} filename Nama file yang akan disertakan.
- * @returns {string} Konten file.
- */
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
-
-
-// =================================================================
-// PENANGANAN ERROR & HELPER
+// ENTRY POINT UNTUK API (MENANGANI PERMINTAAN POST)
 // =================================================================
 
-/**
- * Wrapper untuk menangani error secara terpusat.
- * Mencegah munculnya pesan "An internal error occurred" di sisi klien.
- * @param {function} func Fungsi yang akan dieksekusi.
- * @returns {function} Fungsi yang sudah dibungkus dengan try-catch.
- */
-function handleErrors(func) {
-  return (...args) => {
-    try {
-      // Logger.log(`Executing: ${func.name} with args: ${JSON.stringify(args)}`);
-      const result = func(...args);
-      // Logger.log(`Result for ${func.name}: ${JSON.stringify(result)}`);
-      return result;
-    } catch (e) {
-      Logger.log(`ERROR in ${func.name}: ${e.toString()}\nStack: ${e.stack}`);
-      // Mengembalikan objek error yang jelas ke frontend.
-      return { success: false, error: `Terjadi kesalahan di server: ${e.message}` };
+function doPost(e) {
+  // Menangani Preflight Request untuk CORS
+  if (e.postData.type === 'application/json' && e.postData.contents === 'OPTIONS') {
+    const response = ContentService.createTextOutput();
+    response.addHeader('Access-Control-Allow-Origin', FRONTEND_URL);
+    response.addHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    response.addHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return response;
+  }
+  
+  try {
+    const body = JSON.parse(e.postData.contents);
+    const { functionName, args } = body;
+
+    if (!functionName) {
+      throw new Error("functionName tidak ditemukan di body permintaan.");
     }
-  };
+    
+    // Daftar fungsi yang diizinkan untuk dipanggil
+    const allowedFunctions = {
+      login: login_,
+      logout: logout_,
+      checkAuth: checkAuth_,
+      getDashboardStats: getDashboardStats_,
+      listSurat: listSurat_,
+      getNewNomorSurat: getNewNomorSurat_,
+      createSurat: createSurat_,
+      updateSurat: updateSurat_,
+      deleteSurat: deleteSurat_,
+      updateUserProfile: updateUserProfile_,
+      ping: ping_
+    };
+    
+    if (typeof allowedFunctions[functionName] !== 'function') {
+      throw new Error(`Fungsi "${functionName}" tidak diizinkan atau tidak ada.`);
+    }
+
+    const result = Array.isArray(args) 
+      ? allowedFunctions[functionName](...args) 
+      : allowedFunctions[functionName]();
+
+    const jsonResponse = ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+    // Menambahkan header CORS ke response
+    jsonResponse.addHeader('Access-Control-Allow-Origin', FRONTEND_URL);
+    
+    return jsonResponse;
+
+  } catch (error) {
+    Logger.log(`API Error: ${error.toString()}\nStack: ${error.stack}`);
+    const errorResponse = ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+    errorResponse.addHeader('Access-Control-Allow-Origin', FRONTEND_URL);
+    return errorResponse;
+  }
 }
 
-/**
- * Mendapatkan semua baris data dari sebuah sheet sebagai array of objects.
- * @param {string} sheetName Nama sheet.
- * @returns {Array<Object>} Array of objects.
- */
+// =================================================================
+// HELPER FUNCTIONS (Sama seperti sebelumnya)
+// =================================================================
+
 function getSheetData(sheetName) {
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(sheetName);
     if (!sheet) return [];
@@ -82,12 +93,6 @@ function getSheetData(sheetName) {
     });
 }
 
-/**
- * Menemukan index baris berdasarkan ID.
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet Objek sheet.
- * @param {string} id ID yang dicari.
- * @returns {number} Index baris (dimulai dari 1), atau -1 jika tidak ditemukan.
- */
 function findRowIndexById(sheet, id) {
     const idColumn = sheet.getRange("A:A").getValues();
     for (let i = 0; i < idColumn.length; i++) {
@@ -98,11 +103,6 @@ function findRowIndexById(sheet, id) {
     return -1;
 }
 
-/**
- * Menyimpan file yang diunggah ke Google Drive.
- * @param {Object} fileData Objek file dari frontend.
- * @returns {string} URL file di Google Drive.
- */
 function saveFileToDrive(fileData) {
   if (!fileData || !fileData.base64Data) return null;
   const decoded = Utilities.base64Decode(fileData.base64Data);
@@ -115,7 +115,7 @@ function saveFileToDrive(fileData) {
 
 
 // =================================================================
-// FUNGSI OTENTIKASI PENGGUNA
+// SEMUA FUNGSI LOGIKA BISNIS (login_, dsb.) TETAP SAMA
 // =================================================================
 
 const login_ = (email, password) => {
@@ -135,7 +135,7 @@ const login_ = (email, password) => {
     headers.forEach((header, i) => {
       user[header] = userRow[i];
     });
-    delete user['Password']; // Jangan kirim password ke client
+    delete user['Password'];
     
     const userProperties = PropertiesService.getUserProperties();
     userProperties.setProperty('user', JSON.stringify(user));
@@ -159,10 +159,6 @@ const checkAuth_ = () => {
     return { success: false };
 };
 
-// =================================================================
-// FUNGSI DASHBOARD
-// =================================================================
-
 const getDashboardStats_ = () => {
     const suratMasuk = getSheetData(SHEET_SURAT_MASUK);
     const suratKeluar = getSheetData(SHEET_SURAT_KELUAR);
@@ -183,15 +179,10 @@ const getDashboardStats_ = () => {
     };
 };
 
-// =================================================================
-// FUNGSI CRUD SURAT
-// =================================================================
-
 const listSurat_ = (type, filters) => {
     const sheetName = type === 'masuk' ? SHEET_SURAT_MASUK : SHEET_SURAT_KELUAR;
     let data = getSheetData(sheetName);
 
-    // Apply filters
     if (filters) {
         if (filters.searchTerm) {
             const searchTerm = filters.searchTerm.toLowerCase();
@@ -214,41 +205,27 @@ const listSurat_ = (type, filters) => {
             data = data.filter(s => s.Status === filters.status);
         }
     }
-    // Sort by Tanggal Surat/Diterima descending
     const dateField = type === 'masuk' ? 'Tanggal Diterima' : 'Tanggal Surat';
     return data.sort((a, b) => new Date(b[dateField]) - new Date(a[dateField]));
 };
 
-const getSuratById_ = (type, id) => {
-    const sheetName = type === 'masuk' ? SHEET_SURAT_MASUK : SHEET_SURAT_KELUAR;
-    const data = getSheetData(sheetName);
-    return data.find(s => s.ID == id) || null;
-}
-
 const getNewNomorSurat_ = () => {
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_SURAT_KELUAR);
     const lastRow = sheet.getLastRow();
-    if (lastRow < 2) return "001"; // Jika belum ada data, mulai dari 001
+    if (lastRow < 2) return "001";
     
-    // Asumsi nomor surat ada di kolom B
     const lastNomor = sheet.getRange(lastRow, 2).getValue();
-    
-    // Logika sederhana untuk menaikkan nomor urut
-    // Ini perlu disesuaikan dengan format nomor surat instansi Anda
     const parts = lastNomor.split('/');
     if (parts.length > 0) {
       let lastNumber = parseInt(parts[0], 10);
       if (!isNaN(lastNumber)) {
         let newNumber = (lastNumber + 1).toString().padStart(3, '0');
-        // Rebuild nomor surat dengan format yang sama
         parts[0] = newNumber;
         return parts.join('/');
       }
     }
-    // Fallback jika format tidak dikenali
     return (lastRow).toString().padStart(3, '0');
 }
-
 
 const createSurat_ = (type, data) => {
     const sheetName = type === 'masuk' ? SHEET_SURAT_MASUK : SHEET_SURAT_KELUAR;
@@ -259,21 +236,15 @@ const createSurat_ = (type, data) => {
     const id = Utilities.getUuid();
     
     headers.forEach((header, i) => {
-        if (header === 'ID') {
-            newRow[i] = id;
-        } else if (header === 'Dibuat Pada' || header === 'Diperbarui Pada') {
-            newRow[i] = new Date();
-        } else if (data[header] !== undefined) {
-            newRow[i] = data[header];
-        }
+        if (header === 'ID') newRow[i] = id;
+        else if (header === 'Dibuat Pada' || header === 'Diperbarui Pada') newRow[i] = new Date();
+        else if (data[header] !== undefined) newRow[i] = data[header];
     });
 
     if (data.file) {
         const fileUrl = saveFileToDrive(data.file);
         const fileUrlIndex = headers.indexOf('File URL');
-        if (fileUrlIndex !== -1) {
-            newRow[fileUrlIndex] = fileUrl;
-        }
+        if (fileUrlIndex !== -1) newRow[fileUrlIndex] = fileUrl;
     }
     
     sheet.appendRow(newRow);
@@ -283,30 +254,21 @@ const createSurat_ = (type, data) => {
 const updateSurat_ = (type, id, data) => {
     const sheetName = type === 'masuk' ? SHEET_SURAT_MASUK : SHEET_SURAT_KELUAR;
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(sheetName);
-    
     const rowIndex = findRowIndexById(sheet, id);
-    if (rowIndex === -1) {
-        return { success: false, message: 'Data tidak ditemukan.' };
-    }
+    if (rowIndex === -1) return { success: false, message: 'Data tidak ditemukan.' };
 
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const rowValues = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
 
     headers.forEach((header, i) => {
-        if (data[header] !== undefined) {
-            rowValues[i] = data[header];
-        }
-        if (header === 'Diperbarui Pada') {
-            rowValues[i] = new Date();
-        }
+        if (data[header] !== undefined) rowValues[i] = data[header];
+        if (header === 'Diperbarui Pada') rowValues[i] = new Date();
     });
 
     if (data.file) {
         const fileUrl = saveFileToDrive(data.file);
         const fileUrlIndex = headers.indexOf('File URL');
-        if (fileUrlIndex !== -1) {
-            rowValues[fileUrlIndex] = fileUrl;
-        }
+        if (fileUrlIndex !== -1) rowValues[fileUrlIndex] = fileUrl;
     }
 
     sheet.getRange(rowIndex, 1, 1, headers.length).setValues([rowValues]);
@@ -316,34 +278,12 @@ const updateSurat_ = (type, id, data) => {
 const deleteSurat_ = (type, id) => {
     const sheetName = type === 'masuk' ? SHEET_SURAT_MASUK : SHEET_SURAT_KELUAR;
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(sheetName);
-    
     const rowIndex = findRowIndexById(sheet, id);
-    if (rowIndex === -1) {
-        return { success: false, message: 'Data tidak ditemukan.' };
-    }
-
+    if (rowIndex === -1) return { success: false, message: 'Data tidak ditemukan.' };
     sheet.deleteRow(rowIndex);
     return { success: true, message: 'Data berhasil dihapus.' };
 };
 
-
-// =================================================================
-// FUNGSI PROFIL PENGGUNA
-// =================================================================
-
-const getUserProfile_ = () => {
-    const userJson = PropertiesService.getUserProperties().getProperty('user');
-    if (userJson) {
-        const user = JSON.parse(userJson);
-        const allUsers = getSheetData(SHEET_PENGGUNA);
-        const freshUserData = allUsers.find(u => u.ID == user.ID);
-        if(freshUserData){
-            delete freshUserData['Password'];
-            return freshUserData;
-        }
-    }
-    return null;
-}
 
 const updateUserProfile_ = (profileData) => {
     const userJson = PropertiesService.getUserProperties().getProperty('user');
@@ -377,34 +317,13 @@ const updateUserProfile_ = (profileData) => {
 
     sheet.getRange(rowIndex, 1, 1, headers.length).setValues([values]);
     
-    // Update session data
     delete updatedUser.Password;
     PropertiesService.getUserProperties().setProperty('user', JSON.stringify(updatedUser));
 
     return { success: true, message: 'Profil berhasil diperbarui.', user: updatedUser };
 }
 
-// =================================================================
-// FUNGSI TES KONEKSI
-// =================================================================
+
 const ping_ = () => {
     return { success: true, source: 'Berhasil dari Google Apps Script' };
 }
-
-// =================================================================
-// EKSPOR FUNGSI AGAR BISA DIPANGGIL DARI CLIENT-SIDE
-// Ini menggunakan wrapper handleErrors untuk semua fungsi
-// =================================================================
-const login = handleErrors(login_);
-const logout = handleErrors(logout_);
-const checkAuth = handleErrors(checkAuth_);
-const getDashboardStats = handleErrors(getDashboardStats_);
-const listSurat = handleErrors(listSurat_);
-const getSuratById = handleErrors(getSuratById_);
-const getNewNomorSurat = handleErrors(getNewNomorSurat_);
-const createSurat = handleErrors(createSurat_);
-const updateSurat = handleErrors(updateSurat_);
-const deleteSurat = handleErrors(deleteSurat_);
-const getUserProfile = handleErrors(getUserProfile_);
-const updateUserProfile = handleErrors(updateUserProfile_);
-const ping = handleErrors(ping_);
