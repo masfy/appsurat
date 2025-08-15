@@ -3,7 +3,7 @@ import { DashboardStats, MailType, Surat, Filters, AuthUser, UserProfile } from 
 // =================================================================
 // KONFIGURASI FRONTEND
 // =================================================================
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzr9ljAatvf1kps6xTAbinVxnqGuZpYCjMX0sWHS_Hvc8c7DK5Vo26hOoyAy0q5ZfO6/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiiq9nD8AwQP0u7E0LTgw_dEP_9Lo__ooIxzCH_TyAqS-7ZElO2jpMncTHmz5wvWZA/exec';
 
 // =================================================================
 // FETCH API IMPLEMENTATION
